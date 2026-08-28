@@ -13,8 +13,8 @@ let currentView = 'home';
 let nigateLogs = [];
 let currentRankingType = 'weekly';
 
-// 🏷️ カスタムジャンル初期データ
-let customGenres = ["全般", "漢字・国語", "数学・微積", "英語", "理科・社会"];
+// 🏷️ カスタムジャンル初期データ（5ジャンル設定）
+let customGenres = ["国語", "数学＆算数", "英語", "理科", "社会"];
 
 // 🏆 アチーブメントデータ
 let unlockedAchievements = {};
@@ -24,13 +24,13 @@ let playerName = "名無し";
 let rankingEnabled = false;
 let soundEnabled = true;
 
-// ❓ クイズデータ
+// ❓ クイズ初期データ
 const defaultQuizList = [
     { id: 1, genre: "英語", q: "英単語『study』の意味は？", a: "勉強する", explanation: "「研究する」という意味でも使われます。" },
-    { id: 2, genre: "数学・微積", q: "かけ算： 7 × 8 ＝ ？", a: "56", explanation: "九九の7の段です。" },
-    { id: 3, genre: "理科・社会", q: "理科：水の化学式は？", a: "H2O", explanation: "水素原子2つと酸素原子1つでできています。" },
+    { id: 2, genre: "数学＆算数", q: "かけ算： 7 × 8 ＝ ？", a: "56", explanation: "九九の7の段です。" },
+    { id: 3, genre: "理科", q: "理科：水の化学式は？", a: "H2O", explanation: "水素原子2つと酸素原子1つでできています。" },
     { id: 4, genre: "英語", q: "英単語『obvious』の意味は？", a: "明らかな", explanation: "「明白な」「わかりきった」という意味の形容詞です。" },
-    { id: 5, genre: "理科・社会", q: "歴史：日本で最初の幕府は？", a: "鎌倉幕府", explanation: "1192年（または1185年）に源頼朝が作りました。" }
+    { id: 5, genre: "社会", q: "歴史：日本で最初の幕府は？", a: "鎌倉幕府", explanation: "1192年（または1185年）に源頼朝が作りました。" }
 ];
 
 let activeQuizList = [...defaultQuizList];
@@ -71,7 +71,7 @@ function getMonthlyId() {
 }
 
 // ==========================================
-// 🏷️ カスタムジャンル管理機能
+// 🏷️ カスタムジャンル管理機能（追加＆編集）
 // ==========================================
 function promptAddGenre(event) {
     if (event) event.stopPropagation();
@@ -87,6 +87,35 @@ function promptAddGenre(event) {
         } else {
             alert("そのジャンルは既に存在します。");
         }
+    }
+}
+
+function promptManageGenres(event) {
+    if (event) event.stopPropagation();
+    const target = prompt(`編集したい既存のジャンル名を入力してください:\n現在のジャンル: ${customGenres.join(', ')}`);
+    if (!target) return;
+
+    const trimmedTarget = target.trim();
+    const index = customGenres.indexOf(trimmedTarget);
+
+    if (index !== -1) {
+        const newName = prompt(`「${trimmedTarget}」の新しいジャンル名を入力してください:`, trimmedTarget);
+        if (newName && newName.trim() !== "" && newName.trim() !== trimmedTarget) {
+            const trimmedNew = newName.trim();
+            customGenres[index] = trimmedNew;
+
+            // 既存データのジャンル名も一括更新
+            nigateLogs.forEach(item => { if (item.genre === trimmedTarget) item.genre = trimmedNew; });
+            activeQuizList.forEach(q => { if (q.genre === trimmedTarget) q.genre = trimmedNew; });
+
+            updateAllGenreSelects();
+            renderWeaknessList();
+            loadQuizQuestion();
+            saveData();
+            alert(`ジャンルを「${trimmedNew}」に変更しました！`);
+        }
+    } else {
+        alert("該当するジャンルが見つかりませんでした。");
     }
 }
 
@@ -282,7 +311,7 @@ function updateGameDisplay() {
 }
 
 // ==========================================
-// 📝 苦手問題機能（+10XP、赤シート、編集/削除、ジャンル対応）
+// 📝 苦手問題機能（入力分離 & 復習クイズ自動同期）
 // ==========================================
 function addWeakness(event) {
     if (event) {
@@ -290,36 +319,51 @@ function addWeakness(event) {
         event.stopPropagation();
     }
 
-    const input = document.getElementById('weaknessInput');
+    const qInput = document.getElementById('weaknessQuestion');
+    const aInput = document.getElementById('weaknessAnswer');
     const genreSelect = document.getElementById('weaknessGenre');
-    if (!input) return;
 
-    const value = input.value.trim();
-    if (value === "") return;
+    if (!qInput || !aInput) return;
 
-    const genre = genreSelect ? genreSelect.value : "全般";
+    const qVal = qInput.value.trim();
+    const aVal = aInput.value.trim();
+    if (qVal === "" || aVal === "") return;
 
+    const genre = genreSelect ? genreSelect.value : "国語";
+
+    // 1. 苦手ノートへの追加（「問題 | 解答」の形式で保存して赤シート機能を維持）
     const newItem = {
         id: Date.now(),
         genre: genre,
-        text: value,
+        text: `${qVal} | ${aVal}`,
         hidden: false
     };
-
     nigateLogs.unshift(newItem);
-    
-    // 💡 作成でXP獲得 (+10XP)
+
+    // 2. 🔄 復習クイズへの自動追加
+    const newQuiz = {
+        id: Date.now() + 1,
+        genre: genre,
+        q: qVal,
+        a: aVal,
+        explanation: "苦手ノートから自動追加された問題です。"
+    };
+    activeQuizList.unshift(newQuiz);
+
+    // XP獲得 & 画面更新
     totalExp += 10;
     checkLevelUp();
-
     renderWeaknessList();
-    input.value = "";
+    loadQuizQuestion();
+
+    qInput.value = "";
+    aInput.value = "";
 
     unlockAchievement('最初の一歩', 'badge1');
     saveData();
 }
 
-function insertWeaknessToList(text, genre = "全般") {
+function insertWeaknessToList(text, genre = "国語") {
     const newItem = {
         id: Date.now(),
         genre: genre,
@@ -344,7 +388,7 @@ function editWeakness(id, event) {
     if (!item) return;
 
     const currentText = typeof item === 'object' ? item.text : item;
-    const newText = prompt("編集後のテキストを入力してください:", currentText);
+    const newText = prompt("編集後のテキストを入力してください (例: 問題 | 解答):", currentText);
     if (newText !== null && newText.trim() !== "") {
         if (typeof item === 'object') {
             item.text = newText.trim();
@@ -383,7 +427,7 @@ function renderWeaknessList() {
 
     filteredLogs.forEach((item, index) => {
         const id = typeof item === 'object' ? (item.id || index) : index;
-        const genre = typeof item === 'object' ? (item.genre || "全般") : "全般";
+        const genre = typeof item === 'object' ? (item.genre || "国語") : "国語";
         const text = typeof item === 'object' ? item.text : item;
         const hidden = typeof item === 'object' ? item.hidden : false;
 
@@ -416,7 +460,7 @@ function renderWeaknessList() {
 }
 
 // ==========================================
-// 🔄 復習クイズ機能（柔軟判定、解説、ジャンル絞り込み、編集/削除）
+// 🔄 復習クイズ機能
 // ==========================================
 function filterQuizGenre() {
     const filterSelect = document.getElementById('quizGenreFilter');
@@ -445,7 +489,7 @@ function loadQuizQuestion() {
     if (currentQuizIndex >= list.length) currentQuizIndex = 0;
 
     const currentQuiz = list[currentQuizIndex];
-    if (qText) qText.innerText = `[${currentQuiz.genre || '全般'}] ${currentQuiz.q}`;
+    if (qText) qText.innerText = `[${currentQuiz.genre || '国語'}] ${currentQuiz.q}`;
     if (rText) rText.innerText = "";
     if (eText) eText.style.display = "none";
 
@@ -459,7 +503,6 @@ function loadQuizQuestion() {
     if (submitBtn) submitBtn.disabled = false;
 }
 
-// 表記揺れ（英数全角半角・大文字小文字・スペース）を吸収
 function normalizeAnswer(str) {
     if (!str) return "";
     return str
@@ -497,7 +540,7 @@ function submitQuizAnswer(event) {
     } else {
         resultDisplay.style.color = "var(--pink-neon)";
         resultDisplay.innerText = `❌ 不正解... 正解: 「${currentQuiz.a}」`;
-        insertWeaknessToList(`${currentQuiz.q} (正解: ${currentQuiz.a})`, currentQuiz.genre || "全般");
+        insertWeaknessToList(`${currentQuiz.q} | ${currentQuiz.a}`, currentQuiz.genre || "国語");
     }
 
     if (currentQuiz.explanation) {
@@ -572,7 +615,7 @@ function renderQuizManageList() {
         const div = document.createElement('div');
         div.style.cssText = 'display:flex; justify-content:space-between; align-items:center; font-size:0.8rem; margin-bottom:4px; background:rgba(255,255,255,0.05); padding:4px 8px; border-radius:4px;';
         div.innerHTML = `
-            <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:80%;">[${q.genre || '全般'}] ${q.q}</span>
+            <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:80%;">[${q.genre || '国語'}] ${q.q}</span>
             <button onclick="deleteCustomQuiz(${q.id || 0}, event)" style="font-size:0.65rem; color:#ef4444; border:1px solid #ef4444; background:none; border-radius:3px; cursor:pointer; padding:2px 4px;">削除</button>
         `;
         container.appendChild(div);
@@ -692,7 +735,7 @@ function loadData() {
         if (gameState.playerName !== undefined) playerName = gameState.playerName;
         if (gameState.rankingEnabled !== undefined) rankingEnabled = gameState.rankingEnabled;
         if (gameState.soundEnabled !== undefined) soundEnabled = gameState.soundEnabled;
-        if (Array.isArray(gameState.genres)) customGenres = gameState.genres;
+        if (Array.isArray(gameState.genres) && gameState.genres.length > 0) customGenres = gameState.genres;
         if (Array.isArray(gameState.quizzes) && gameState.quizzes.length > 0) {
             activeQuizList = gameState.quizzes;
         }

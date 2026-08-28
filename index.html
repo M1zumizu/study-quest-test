@@ -68,13 +68,17 @@
                         <h2>苦手ノート (+10XP)</h2>
                     </div>
                     <div class="card-body">
-                        <form onsubmit="addWeakness(event)" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
-                            <div style="display:flex; gap:4px; flex:1; min-width:140px;">
+                        <form onsubmit="addWeakness(event)" style="display:flex; flex-direction:column; gap:6px; margin-bottom:10px;">
+                            <div style="display:flex; gap:4px;">
                                 <select id="weaknessGenre" class="input-game" style="margin-bottom:0; flex:1;"></select>
                                 <button type="button" class="btn-mini" onclick="promptAddGenre(event)">＋ジャンル</button>
+                                <button type="button" class="btn-mini" onclick="promptManageGenres(event)">✏️編集</button>
                             </div>
-                            <input type="text" id="weaknessInput" class="input-game" style="flex:2; min-width:180px; margin-bottom:0;" placeholder="問題や暗記項目 (タップで隠す部分を | で区切る例: 富士山 | 3776m)">
-                            <button type="submit" class="btn-add">追加</button>
+                            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                                <input type="text" id="weaknessQuestion" class="input-game" style="flex:1; min-width:140px; margin-bottom:0;" placeholder="問題・暗記項目 (例: 富士山の標高)" required>
+                                <input type="text" id="weaknessAnswer" class="input-game" style="flex:1; min-width:140px; margin-bottom:0;" placeholder="解答 (例: 3776m)" required>
+                                <button type="submit" class="btn-add">追加</button>
+                            </div>
                         </form>
 
                         <!-- 絞り込みフィルター -->
@@ -100,6 +104,7 @@
                             <span style="font-size:0.8rem; color:var(--text-sub);">ジャンル:</span>
                             <select id="quizGenreFilter" onchange="filterQuizGenre()" class="input-game-mini" style="width:auto; margin:0;"></select>
                             <button type="button" class="btn-mini" onclick="promptAddGenre(event)">＋ジャンル</button>
+                            <button type="button" class="btn-mini" onclick="promptManageGenres(event)">✏️編集</button>
                         </div>
 
                         <div class="quiz-play-screen">
@@ -120,6 +125,7 @@
                                 <div style="display:flex; gap:4px;">
                                     <select id="customGenre" class="input-game-mini" style="flex:1;"></select>
                                     <button type="button" class="btn-mini" onclick="promptAddGenre(event)">＋ジャンル</button>
+                                    <button type="button" class="btn-mini" onclick="promptManageGenres(event)">✏️編集</button>
                                 </div>
                                 <input type="text" id="customQuestion" class="input-game-mini" placeholder="問題文を入力" required>
                                 <input type="text" id="customAnswer" class="input-game-mini" placeholder="正解を入力" required>
