@@ -14,7 +14,7 @@ let nigateLogs = [];
 let currentRankingType = 'weekly';
 
 // 🏷️ カスタムジャンル初期データ（5ジャンル設定）
-let customGenres = ["国語", "数学＆算数", "英語", "理科", "社会"];
+let customGenres = ["国語", "＆算数", "英語", "理科", "社会","情報"];
 
 // 🏆 アチーブメントデータ
 let unlockedAchievements = {};
