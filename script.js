@@ -92,7 +92,7 @@ function promptAddGenre(event) {
 
 function promptManageGenres(event) {
     if (event) event.stopPropagation();
-    const target = prompt(`編集したい既存のジャンル名を入力してください:\n現在のジャンル: ${customGenres.join(', ')}`);
+    const target = prompt(`操作したい既存のジャンル名を入力してください:\n現在のジャンル: ${customGenres.join(', ')}`);
     if (!target) return;
 
     const trimmedTarget = target.trim();
@@ -104,7 +104,16 @@ function promptManageGenres(event) {
 
     const index = customGenres.indexOf(trimmedTarget);
 
-    if (index !== -1) {
+    if (index === -1) {
+        alert("該当するジャンルが見つかりませんでした。");
+        return;
+    }
+
+    // 編集か削除かを選択
+    const action = prompt(`「${trimmedTarget}」に対する操作を選択してください:\n1: 名前を変更する\n2: ジャンルを削除する\n(1 または 2 を入力)`);
+
+    if (action === "1") {
+        // 名前変更処理
         const newName = prompt(`「${trimmedTarget}」の新しいジャンル名を入力してください:`, trimmedTarget);
         if (newName && newName.trim() !== "" && newName.trim() !== trimmedTarget) {
             const trimmedNew = newName.trim();
@@ -120,8 +129,22 @@ function promptManageGenres(event) {
             saveData();
             alert(`ジャンルを「${trimmedNew}」に変更しました！`);
         }
-    } else {
-        alert("該当するジャンルが見つかりませんでした。");
+    } else if (action === "2") {
+        // 削除処理
+        const confirmDelete = confirm(`「${trimmedTarget}」を削除してもよろしいですか？\n※このジャンルに設定されていた問題は「その他」に変更されます。`);
+        if (confirmDelete) {
+            customGenres.splice(index, 1);
+
+            // 該当ジャンルの問題を「その他」に移動
+            nigateLogs.forEach(item => { if (item.genre === trimmedTarget) item.genre = "その他"; });
+            activeQuizList.forEach(q => { if (q.genre === trimmedTarget) q.genre = "その他"; });
+
+            updateAllGenreSelects();
+            renderWeaknessList();
+            loadQuizQuestion();
+            saveData();
+            alert(`ジャンル「${trimmedTarget}」を削除しました。`);
+        }
     }
 }
 
