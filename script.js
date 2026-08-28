@@ -13,8 +13,8 @@ let currentView = 'home';
 let nigateLogs = [];
 let currentRankingType = 'weekly';
 
-// 🏷️ カスタムジャンル初期データ（5ジャンル設定）
-let customGenres = ["国語", "＆算数", "英語", "理科", "社会","情報"];
+// 🏷️ カスタムジャンル初期データ（サンプル問題＋指定ジャンル）
+let customGenres = ["サンプル問題", "国語", "数学＆算数", "英語", "理科", "社会", "情報"];
 
 // 🏆 アチーブメントデータ
 let unlockedAchievements = {};
@@ -24,13 +24,13 @@ let playerName = "名無し";
 let rankingEnabled = false;
 let soundEnabled = true;
 
-// ❓ クイズ初期データ
+// ❓ クイズ初期データ（「サンプル問題」として固定保護）
 const defaultQuizList = [
-    { id: 1, genre: "英語", q: "英単語『study』の意味は？", a: "勉強する", explanation: "「研究する」という意味でも使われます。" },
-    { id: 2, genre: "数学＆算数", q: "かけ算： 7 × 8 ＝ ？", a: "56", explanation: "九九の7の段です。" },
-    { id: 3, genre: "理科", q: "理科：水の化学式は？", a: "H2O", explanation: "水素原子2つと酸素原子1つでできています。" },
-    { id: 4, genre: "英語", q: "英単語『obvious』の意味は？", a: "明らかな", explanation: "「明白な」「わかりきった」という意味の形容詞です。" },
-    { id: 5, genre: "社会", q: "歴史：日本で最初の幕府は？", a: "鎌倉幕府", explanation: "1192年（または1185年）に源頼朝が作りました。" }
+    { id: "sample_1", genre: "サンプル問題", q: "英単語『study』の意味は？", a: "勉強する", explanation: "「研究する」という意味でも使われます。", isSample: true },
+    { id: "sample_2", genre: "サンプル問題", q: "かけ算： 7 × 8 ＝ ？", a: "56", explanation: "九九の7の段です。", isSample: true },
+    { id: "sample_3", genre: "サンプル問題", q: "理科：水の化学式は？", a: "H2O", explanation: "水素原子2つと酸素原子1つでできています。", isSample: true },
+    { id: "sample_4", genre: "サンプル問題", q: "英単語『obvious』の意味は？", a: "明らかな", explanation: "「明白な」「わかりきった」という意味の形容詞です。", isSample: true },
+    { id: "sample_5", genre: "サンプル問題", q: "歴史：日本で最初の幕府は？", a: "鎌倉幕府", explanation: "1192年（または1185年）に源頼朝が作りました。", isSample: true }
 ];
 
 let activeQuizList = [...defaultQuizList];
@@ -96,6 +96,12 @@ function promptManageGenres(event) {
     if (!target) return;
 
     const trimmedTarget = target.trim();
+
+    if (trimmedTarget === "サンプル問題") {
+        alert("「サンプル問題」ジャンルは変更・削除できません。");
+        return;
+    }
+
     const index = customGenres.indexOf(trimmedTarget);
 
     if (index !== -1) {
@@ -137,6 +143,11 @@ function updateAllGenreSelects() {
         }
 
         customGenres.forEach(g => {
+            // 追加フォーム（weaknessGenre, customGenre）からは「サンプル問題」を除外
+            if ((id === 'weaknessGenre' || id === 'customGenre') && g === "サンプル問題") {
+                return;
+            }
+
             const opt = document.createElement('option');
             opt.value = g;
             opt.innerText = g;
@@ -331,7 +342,7 @@ function addWeakness(event) {
 
     const genre = genreSelect ? genreSelect.value : "国語";
 
-    // 1. 苦手ノートへの追加（「問題 | 解答」の形式で保存して赤シート機能を維持）
+    // 1. 苦手ノートへの追加
     const newItem = {
         id: Date.now(),
         genre: genre,
@@ -599,6 +610,14 @@ function addCustomQuiz(event) {
 
 function deleteCustomQuiz(id, event) {
     if (event) event.stopPropagation();
+
+    // サンプル問題の削除ブロック
+    const targetQuiz = activeQuizList.find(q => q.id === id);
+    if (targetQuiz && (targetQuiz.isSample || targetQuiz.genre === "サンプル問題")) {
+        alert("サンプル問題は削除できません。");
+        return;
+    }
+
     activeQuizList = activeQuizList.filter(q => q.id !== id);
     renderQuizManageList();
     loadQuizQuestion();
@@ -612,11 +631,17 @@ function renderQuizManageList() {
     container.innerHTML = "<p style='font-size:0.75rem; color:var(--text-sub); margin-bottom:6px;'>【作成済みクイズ一覧】</p>";
 
     activeQuizList.forEach(q => {
+        const isSample = q.isSample || q.genre === "サンプル問題";
         const div = document.createElement('div');
         div.style.cssText = 'display:flex; justify-content:space-between; align-items:center; font-size:0.8rem; margin-bottom:4px; background:rgba(255,255,255,0.05); padding:4px 8px; border-radius:4px;';
+        
+        const actionHtml = isSample 
+            ? `<span style="font-size:0.65rem; color:#888;">固定</span>`
+            : `<button onclick="deleteCustomQuiz(${q.id || 0}, event)" style="font-size:0.65rem; color:#ef4444; border:1px solid #ef4444; background:none; border-radius:3px; cursor:pointer; padding:2px 4px;">削除</button>`;
+
         div.innerHTML = `
-            <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:80%;">[${q.genre || '国語'}] ${q.q}</span>
-            <button onclick="deleteCustomQuiz(${q.id || 0}, event)" style="font-size:0.65rem; color:#ef4444; border:1px solid #ef4444; background:none; border-radius:3px; cursor:pointer; padding:2px 4px;">削除</button>
+            <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:75%;">[${q.genre || '国語'}] ${q.q}</span>
+            ${actionHtml}
         `;
         container.appendChild(div);
     });
