@@ -11,7 +11,7 @@ let seconds = 0;
 let timerInterval = null;
 let currentView = 'home';
 let nigateLogs = [];
-let currentRankingType = 'weekly';
+let currentRankingType = 'daily';
 
 // 🏷️ カスタムジャンル初期データ（サンプル問題＋指定ジャンル）
 let customGenres = ["サンプル問題", "国語", "数学＆算数", "英語", "理科", "社会", "情報"];
@@ -71,7 +71,7 @@ function getMonthlyId() {
 }
 
 // ==========================================
-// 🏷️ カスタムジャンル管理機能（追加＆編集）
+// 🏷️ カスタムジャンル管理機能（追加＆編集・削除）
 // ==========================================
 function promptAddGenre(event) {
     if (event) event.stopPropagation();
@@ -364,19 +364,20 @@ function addWeakness(event) {
     if (qVal === "" || aVal === "") return;
 
     const genre = genreSelect ? genreSelect.value : "国語";
+    const sharedId = Date.now(); // 苦手ノートと復習クイズで共通のID
 
     // 1. 苦手ノートへの追加
     const newItem = {
-        id: Date.now(),
+        id: sharedId,
         genre: genre,
         text: `${qVal} | ${aVal}`,
         hidden: false
     };
     nigateLogs.unshift(newItem);
 
-    // 2. 🔄 復習クイズへの自動追加
+    // 2. 🔄 復習クイズへの自動追加（同じIDを割り当て）
     const newQuiz = {
-        id: Date.now() + 1,
+        id: sharedId,
         genre: genre,
         q: qVal,
         a: aVal,
@@ -384,7 +385,6 @@ function addWeakness(event) {
     };
     activeQuizList.unshift(newQuiz);
 
-    // XP獲得 & 画面更新
     totalExp += 10;
     checkLevelUp();
     renderWeaknessList();
@@ -411,23 +411,54 @@ function insertWeaknessToList(text, genre = "国語") {
 
 function deleteWeakness(id, event) {
     if (event) event.stopPropagation();
+
+    // 1. 苦手ノートから削除
     nigateLogs = nigateLogs.filter(item => (item.id || item) !== id);
+
+    // 2. 🔄 復習クイズからも連動して削除（サンプル問題は保護）
+    activeQuizList = activeQuizList.filter(q => q.id !== id || q.isSample || q.genre === "サンプル問題");
+
     renderWeaknessList();
+    renderQuizManageList();
+    loadQuizQuestion();
     saveData();
 }
 
 function editWeakness(id, event) {
     if (event) event.stopPropagation();
-    const item = nigateLogs.find(i => i.id === id);
+    const item = nigateLogs.find(i => (i.id || i) === id);
     if (!item) return;
 
     const currentText = typeof item === 'object' ? item.text : item;
-    const newText = prompt("編集後のテキストを入力してください (例: 問題 | 解答):", currentText);
+    const newText = prompt("編集後のテキストを入力してください:\n(例: 問題 | 解答 または 文章の{隠したい部分})", currentText);
     if (newText !== null && newText.trim() !== "") {
+        const trimmedText = newText.trim();
         if (typeof item === 'object') {
-            item.text = newText.trim();
+            item.text = trimmedText;
         }
+
+        // 🔄 復習クイズ側も連動して更新
+        const quizItem = activeQuizList.find(q => q.id === id);
+        if (quizItem && !quizItem.isSample && quizItem.genre !== "サンプル問題") {
+            if (trimmedText.includes('{')) {
+                // {隠し文字} 形式の場合、{ } の中身を正解にする
+                const match = trimmedText.match(/^(.*?)\{(.*?)\}(.*)$/);
+                if (match) {
+                    quizItem.q = (match[1] + " ___ " + match[3]).trim();
+                    quizItem.a = match[2].trim();
+                }
+            } else if (trimmedText.includes('|')) {
+                const parts = trimmedText.split('|');
+                quizItem.q = parts[0].trim();
+                quizItem.a = parts[1].trim();
+            } else {
+                quizItem.q = trimmedText;
+            }
+        }
+
         renderWeaknessList();
+        renderQuizManageList();
+        loadQuizQuestion();
         saveData();
     }
 }
@@ -465,16 +496,22 @@ function renderWeaknessList() {
         const text = typeof item === 'object' ? item.text : item;
         const hidden = typeof item === 'object' ? item.hidden : false;
 
-        let displayText = text;
-        if (text.includes('|')) {
-            const parts = text.split('|');
-            const front = parts[0];
-            const back = parts.slice(1).join('|');
-            const maskStyle = hidden 
-                ? 'background:#333; color:#333; border-radius:3px; padding:0 6px; cursor:pointer; user-select:none;' 
-                : 'color:var(--pink-neon); cursor:pointer; text-decoration:underline;';
-            displayText = `${front} <span onclick="toggleMaskWeakness(${id}, event)" style="${maskStyle}">${hidden ? '▶タップで表示' : back}</span>`;
+        let rawText = text;
+
+        // { } が含まれていない「問題 | 解答」形式の場合、解答部分を {解答} に自動変換
+        if (!rawText.includes('{') && rawText.includes('|')) {
+            const parts = rawText.split('|');
+            rawText = `${parts[0]} | {${parts.slice(1).join('|').trim()}}`;
         }
+
+        // {隠したい単語} を赤シート用マスキング表示に変換
+        const displayText = rawText.replace(/\{([^}]+)\}/g, (match, target) => {
+            const maskStyle = hidden
+                ? 'background:#ff4757; color:#ff4757; border-radius:3px; padding:0 4px; cursor:pointer; user-select:none;'
+                : 'color:var(--pink-neon); cursor:pointer; text-decoration:underline; font-weight:bold;';
+
+            return `<span onclick="toggleMaskWeakness(${id}, event)" style="${maskStyle}" title="タップで表示/非表示">${target}</span>`;
+        });
 
         const div = document.createElement('div');
         div.className = 'log-item';
@@ -903,6 +940,20 @@ window.addEventListener('DOMContentLoaded', () => {
 function switchRankingTab(type, event) {
     if (event) event.stopPropagation();
     currentRankingType = type;
+
+    // タブのボタンのハイライト切替
+    const tabs = ['daily', 'weekly', 'monthly', 'overall'];
+    tabs.forEach(t => {
+        const btn = document.getElementById(`tab-${t}`);
+        if (btn) {
+            if (t === type) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        }
+    });
+
     loadRanking();
 }
 
@@ -918,14 +969,20 @@ async function sendScoreToRanking() {
         updatedAt: new Date()
     };
 
-    try {
-        await setDoc(doc(window.db, `rankings_daily_${getDailyId()}`, playerId), payload);
-        await setDoc(doc(window.db, `rankings_weekly_${getWeeklyId()}`, playerId), payload);
-        await setDoc(doc(window.db, `rankings_monthly_${getMonthlyId()}`, playerId), payload);
-        await setDoc(doc(window.db, `rankings_overall`, playerId), payload);
-        console.log("全ランキングの更新成功");
-    } catch (e) {
-        console.error("スコア送信エラー:", e);
+    // それぞれのランキング宛に個別に送信（1つでエラーが起きても他に影響させない）
+    const targets = [
+        `rankings_daily_${getDailyId()}`,
+        `rankings_weekly_${getWeeklyId()}`,
+        `rankings_monthly_${getMonthlyId()}`,
+        `rankings_overall`
+    ];
+
+    for (const targetCol of targets) {
+        try {
+            await setDoc(doc(window.db, targetCol, playerId), payload);
+        } catch (e) {
+            console.error(`[${targetCol}] へのスコア送信エラー:`, e);
+        }
     }
 }
 
@@ -957,14 +1014,14 @@ async function loadRanking() {
             return;
         }
 
-        let html = '<ol class="ranking-list">';
+        let html = '<ol class="ranking-list" style="padding-left:20px; margin:0;">';
         let rank = 1;
         querySnapshot.forEach((doc) => {
             const data = doc.data();
             const pName = data.playerName || '名無し';
             const lvl = data.level || 1;
             const exp = data.totalExp || 0;
-            html += `<li><strong>${rank}位</strong> : ${pName} - Lv.${lvl} (${exp} XP)</li>`;
+            html += `<li style="margin-bottom:6px; font-size:0.9rem;"><strong>${rank}位</strong> : ${pName} - Lv.${lvl} (${exp} XP)</li>`;
             rank++;
         });
         html += '</ol>';
@@ -972,6 +1029,55 @@ async function loadRanking() {
         displayElem.innerHTML = html;
     } catch (e) {
         console.error("ランキング取得エラー:", e);
-        displayElem.innerHTML = "<p style='color:#ef4444; font-size:0.85rem;'>データの取得に失敗しました。</p>";
+        displayElem.innerHTML = "<p style='color:#ef4444; font-size:0.85rem;'>データの取得に失敗しました。<br>(コンソールエラーを確認してください)</p>";
     }
+}
+
+// 日・週・月 の日付キーを取得するヘルパー関数
+function getDateKeys() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const date = String(now.getDate()).padStart(2, '0');
+    
+    // 年間の経過週数を計算
+    const firstDay = new Date(year, 0, 1);
+    const pastDays = (now - firstDay) / 86400000;
+    const weekNum = Math.ceil((pastDays + firstDay.getDay() + 1) / 7);
+
+    return {
+        daily: `${year}-${month}-${date}`,
+        weekly: `${year}-W${weekNum}`,
+        monthly: `${year}-${month}`
+    };
+}
+
+// 期間別XPの判定とリセット処理
+function checkPeriodExpReset() {
+    const keys = getDateKeys();
+    const lastKeys = JSON.parse(localStorage.getItem('lastDateKeys') || '{}');
+
+    if (lastKeys.daily !== keys.daily) localStorage.setItem('dailyExp', '0');
+    if (lastKeys.weekly !== keys.weekly) localStorage.setItem('weeklyExp', '0');
+    if (lastKeys.monthly !== keys.monthly) localStorage.setItem('monthlyExp', '0');
+
+    localStorage.setItem('lastDateKeys', JSON.stringify(keys));
+}
+
+// XPを獲得した時に呼ぶ関数（既存のXP加算処理に組み込みます）
+function addExpWithPeriod(amount) {
+    checkPeriodExpReset();
+
+    let dExp = parseInt(localStorage.getItem('dailyExp') || '0') + amount;
+    let wExp = parseInt(localStorage.getItem('weeklyExp') || '0') + amount;
+    let mExp = parseInt(localStorage.getItem('monthlyExp') || '0') + amount;
+
+    localStorage.setItem('dailyExp', dExp.toString());
+    localStorage.setItem('weeklyExp', wExp.toString());
+    localStorage.setItem('monthlyExp', mExp.toString());
+
+    totalExp += amount;
+    checkLevelUp();
+    saveData();
+    updateFirestoreRankings(); // Firestoreへ送信
 }
